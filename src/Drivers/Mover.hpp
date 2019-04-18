@@ -30,6 +30,8 @@
 #include <QMCWaveFunctions/WaveFunction.h>
 #include <Particle/ParticleSet_builder.hpp>
 #include <Input/pseudo.hpp>
+#include <algorithm>
+#include <iterator>
 
 namespace qmcplusplus
 {
@@ -76,34 +78,42 @@ template<class T, typename TBOOL>
 const std::vector<T*>
     filtered_list(const std::vector<T*>& input_list, const std::vector<TBOOL>& chosen)
 {
-  std::vector<T*> final_list;
-  for (int iw = 0; iw < input_list.size(); iw++)
+  using filtered_type = std::vector<T*>;
+  using size_type = typename filtered_type::size_type;
+
+  filtered_type final_list;
+  final_list.reserve(input_list.size());
+  for (size_type iw = 0; iw != input_list.size(); ++iw)
     if (chosen[iw])
       final_list.push_back(input_list[iw]);
+  final_list.shrink_to_fit();
   return final_list;
 }
 
 const std::vector<ParticleSet*> extract_els_list(const std::vector<Mover*>& mover_list)
 {
   std::vector<ParticleSet*> els_list;
-  for (auto it = mover_list.begin(); it != mover_list.end(); it++)
-    els_list.push_back(&(*it)->els);
+  els_list.reserve(mover_list.size());
+  std::transform(std::begin(mover_list), std::end(mover_list), std::back_inserter(els_list),
+                 [](Mover* m) { return &m->els; });
   return els_list;
 }
 
 const std::vector<SPOSet*> extract_spo_list(const std::vector<Mover*>& mover_list)
 {
   std::vector<SPOSet*> spo_list;
-  for (auto it = mover_list.begin(); it != mover_list.end(); it++)
-    spo_list.push_back((*it)->spo);
+  spo_list.reserve(mover_list.size());
+  std::transform(std::begin(mover_list), std::end(mover_list), std::back_inserter(spo_list),
+                 [](Mover* m){ return m->spo; });
   return spo_list;
 }
 
 const std::vector<WaveFunction*> extract_wf_list(const std::vector<Mover*>& mover_list)
 {
   std::vector<WaveFunction*> wf_list;
-  for (auto it = mover_list.begin(); it != mover_list.end(); it++)
-    wf_list.push_back(&(*it)->wavefunction);
+  wf_list.reserve(mover_list.size());
+  std::transform(std::begin(mover_list), std::end(mover_list), std::back_inserter(wf_list),
+                 [](Mover* m){ return &m->wavefunction; });
   return wf_list;
 }
 
