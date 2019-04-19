@@ -369,17 +369,19 @@ int main(int argc, char** argv)
     Timers[Timer_Total]->start();
 
     Timers[Timer_Init]->start();
+    std::vector<std::unique_ptr<Mover>> owning_mover_list(nmovers);
     std::vector<Mover*> mover_list(nmovers, nullptr);
     // prepare movers
     #pragma omp parallel for
-    for (int iw = 0; iw < nmovers; iw++)
+    for (int iw = 0; iw < nmovers; ++iw)
     {
       const int ip        = omp_get_thread_num();
       const int member_id = ip % team_size;
 
       // create and initialize movers
-      Mover* thiswalker = new Mover(myPrimes[ip], ions);
-      mover_list[iw]    = thiswalker;
+      owning_mover_list[iw] = std::unique_ptr<Mover>(new Mover(myPrimes[ip], ions));
+      mover_list[iw] = owning_mover_list[iw].get();
+      Mover* thiswalker = mover_list[iw];
 
       // create a spo view in each Mover
       thiswalker->spo = build_SPOSet_view(useRef, *spo_main, team_size, member_id);
@@ -548,11 +550,6 @@ int main(int argc, char** argv)
     }
     Timers[Timer_Total]->stop();
 
-    // free all movers
-    #pragma omp parallel for
-    for (int iw = 0; iw < nmovers; iw++)
-      delete mover_list[iw];
-    mover_list.clear();
   }
 
   if (comm.root())
