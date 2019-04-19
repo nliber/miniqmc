@@ -13,11 +13,14 @@
 #include <Utilities/RandomGenerator.h>
 #include "QMCWaveFunctions/einspline_spo.hpp"
 #include "QMCWaveFunctions/einspline_spo_ref.hpp"
+#include <cassert>
 
 namespace qmcplusplus
 {
 namespace
 {
+    // Helper for public build_SPOSet which builds it independent of the
+    // derived SPOSetType
     template<typename SPOSetType>
     std::unique_ptr<SPOSet>
     build_SPOSet(int nx,
@@ -51,15 +54,21 @@ std::unique_ptr<SPOSet> build_SPOSet(bool useRef,
 
 namespace
 {
+    // Helper for public build_SPOSet_view
+    // which builds it independent of the
+    // derived SPOSetType
     template<typename SPOSetType>
     std::unique_ptr<SPOSet>
-    build_SPOSet_view(const SPOSet* SPOSet_main, int team_size, int member_id)
+    build_SPOSet_view(const SPOSet& SPOSet_main, int team_size, int member_id)
     {
-        return std::unique_ptr<SPOSetType>(new SPOSetType(*static_cast<const SPOSetType*>(SPOSet_main), team_size, member_id));
+        assert(     dynamic_cast<const SPOSetType*>(&SPOSet_main));
+        auto& main = static_cast<const SPOSetType&>( SPOSet_main);
+
+        return std::unique_ptr<SPOSetType>(new SPOSetType(main, team_size, member_id));
     }
 }
 
-std::unique_ptr<SPOSet> build_SPOSet_view(bool useRef, const SPOSet* SPOSet_main, int team_size, int member_id)
+std::unique_ptr<SPOSet> build_SPOSet_view(bool useRef, const SPOSet& SPOSet_main, int team_size, int member_id)
 {
     return useRef ?
         build_SPOSet_view<miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>>(SPOSet_main, team_size, member_id) :

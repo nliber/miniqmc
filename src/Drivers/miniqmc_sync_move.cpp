@@ -382,7 +382,7 @@ int main(int argc, char** argv)
       mover_list[iw]    = thiswalker;
 
       // create a spo view in each Mover
-      thiswalker->spo = build_SPOSet_view(useRef, spo_main.get(), team_size, member_id);
+      thiswalker->spo = build_SPOSet_view(useRef, *spo_main, team_size, member_id);
 
       // create wavefunction per mover
       build_WaveFunction(useRef, thiswalker->wavefunction, ions, thiswalker->els, thiswalker->rng, enableJ3);

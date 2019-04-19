@@ -406,7 +406,7 @@ int main(int argc, char** argv)
         // create and initialize movers
         Mover thiswalker(myPrimes[teamID], ions);
         // create a spo view in each Mover
-        thiswalker.spo = build_SPOSet_view(useRef, spo_main.get(), team_size, teamID);
+        thiswalker.spo = build_SPOSet_view(useRef, *spo_main, team_size, teamID);
   
         // create wavefunction per mover
         build_WaveFunction(useRef, thiswalker.wavefunction, ions, thiswalker.els, thiswalker.rng, enableJ3);
