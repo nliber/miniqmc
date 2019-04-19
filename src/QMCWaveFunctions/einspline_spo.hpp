@@ -147,6 +147,7 @@ struct einspline_spo : public SPOSet
     // However, since we've converted the large chunks of memory to views, garbage collection is
     // handled automatically.  Thus, setting the spline_type objects to empty views lets Kokkos handle the Garbage collection.
 
+    //TODO NLIBER remove entire body of destructor (and make sure it works)
     if (!is_copy)
     {
       einsplines = Kokkos::View<spline_type*>();
@@ -177,14 +178,16 @@ struct einspline_spo : public SPOSet
 
     for (int i = 0; i < nBlocks; ++i)
     {
-      //psi[i].resize(nSplinesPerBlock);
-      //grad[i].resize(nSplinesPerBlock);
-      //hess[i].resize(nSplinesPerBlock);
+        psi[i] = vContainer_type("psi_i", nSplinesPerBlock);
+        //Kokkos::resize(psi[i], nSplinesPerBlock);
+        Kokkos::resize(grad[i], nSplinesPerBlock);
+        Kokkos::resize(hess[i], nSplinesPerBlock);
 
       //Using the "view-of-views" placement-new construct.
-      new (&psi(i)) vContainer_type("psi_i", nSplinesPerBlock);
-      new (&grad(i)) gContainer_type("grad_i", nSplinesPerBlock);
-      new (&hess(i)) hContainer_type("hess_i", nSplinesPerBlock);
+      //new (&psi(i)) vContainer_type("psi_i", nSplinesPerBlock);
+      //new (&grad(i)) gContainer_type("grad_i", nSplinesPerBlock);
+      //new (&hess(i)) hContainer_type("hess_i", nSplinesPerBlock);
+      
     }
   }
 
@@ -204,7 +207,7 @@ struct einspline_spo : public SPOSet
       PosType end(1);
 
       //    einsplines.resize(nBlocks);
-      einsplines = Kokkos::View<spline_type*>("einsplines", nBlocks);
+      Kokkos::resize(einsplines, nBlocks);
 
       RandomGenerator<T> myrandom(11);
       //Array<T, 3> coef_data(nx+3, ny+3, nz+3);
@@ -387,12 +390,23 @@ struct einspline_spo : public SPOSet
                                   nSplinesPerBlock);
   }
 
-  void print(std::ostream& os)
+  void print(std::ostream& os) const
   {
-    os << "SPO nBlocks=" << nBlocks << " firstBlock=" << firstBlock << " lastBlock=" << lastBlock
-       << " nSplines=" << nSplines << " nSplinesPerBlock=" << nSplinesPerBlock << std::endl;
+    os << *this << '\n';
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, einspline_spo const& that)
+  {
+      return os
+          << "SPO nBlocks=" << that.nBlocks
+          << " firstBlock=" << that.firstBlock
+          << " lastBlock=" << that.lastBlock
+          << " nSplines=" << that.nSplines
+          << " nSplinesPerBlock=" << that.nSplinesPerBlock
+          ;
   }
 };
 } // namespace qmcplusplus
 
 #endif
+

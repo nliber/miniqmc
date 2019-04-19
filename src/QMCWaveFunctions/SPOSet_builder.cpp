@@ -16,47 +16,55 @@
 
 namespace qmcplusplus
 {
-SPOSet* build_SPOSet(bool useRef,
-                     int nx,
-                     int ny,
-                     int nz,
-                     int num_splines,
-                     int nblocks,
-                     const Tensor<OHMMS_PRECISION, 3>& lattice_b,
-                     bool init_random)
+namespace
 {
-  if (useRef)
-  {
-    auto* spo_main = new miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>;
-    spo_main->set(nx, ny, nz, num_splines, nblocks);
-    spo_main->Lattice.set(lattice_b);
-    return dynamic_cast<SPOSet*>(spo_main);
-  }
-  else
-  {
-    auto* spo_main = new einspline_spo<OHMMS_PRECISION>;
-    spo_main->set(nx, ny, nz, num_splines, nblocks);
-    spo_main->Lattice.set(lattice_b);
-    return dynamic_cast<SPOSet*>(spo_main);
-  }
+    template<typename SPOSetType>
+    std::unique_ptr<SPOSet>
+    build_SPOSet(int nx,
+                 int ny,
+                 int nz,
+                 int num_splines,
+                 int nblocks,
+                 const Tensor<OHMMS_PRECISION, 3>& lattice_b,
+                 bool init_random)
+    {
+        std::unique_ptr<SPOSetType> spo_main(new SPOSetType);
+        spo_main->set(nx, ny, nz, num_splines, nblocks);
+        spo_main->Lattice.set(lattice_b);
+        return spo_main;
+    }
+} // namespace
+
+std::unique_ptr<SPOSet> build_SPOSet(bool useRef,
+                                     int nx,
+                                     int ny,
+                                     int nz,
+                                     int num_splines,
+                                     int nblocks,
+                                     const Tensor<OHMMS_PRECISION, 3>& lattice_b,
+                                     bool init_random)
+{
+  return useRef ?
+      build_SPOSet<miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>>(nx, ny, nz, num_splines, nblocks, lattice_b, init_random) :
+      build_SPOSet<miniqmcreference::einspline_spo    <OHMMS_PRECISION>>(nx, ny, nz, num_splines, nblocks, lattice_b, init_random);
 }
 
-SPOSet* build_SPOSet_view(bool useRef, const SPOSet* SPOSet_main, int team_size, int member_id)
+namespace
 {
-  if (useRef)
-  {
-    auto* temp_ptr =
-        dynamic_cast<const miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>*>(SPOSet_main);
-    auto* spo_view =
-        new miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>(*temp_ptr, team_size, member_id);
-    return dynamic_cast<SPOSet*>(spo_view);
-  }
-  else
-  {
-    auto* temp_ptr = dynamic_cast<const einspline_spo<OHMMS_PRECISION>*>(SPOSet_main);
-    auto* spo_view = new einspline_spo<OHMMS_PRECISION>(*temp_ptr, team_size, member_id);
-    return dynamic_cast<SPOSet*>(spo_view);
-  }
+    template<typename SPOSetType>
+    std::unique_ptr<SPOSet>
+    build_SPOSet_view(const SPOSet* SPOSet_main, int team_size, int member_id)
+    {
+        return std::unique_ptr<SPOSetType>(new SPOSetType(*static_cast<const SPOSetType*>(SPOSet_main), team_size, member_id));
+    }
+}
+
+std::unique_ptr<SPOSet> build_SPOSet_view(bool useRef, const SPOSet* SPOSet_main, int team_size, int member_id)
+{
+    return useRef ?
+        build_SPOSet_view<miniqmcreference::einspline_spo_ref<OHMMS_PRECISION>>(SPOSet_main, team_size, member_id) :
+        build_SPOSet_view<miniqmcreference::einspline_spo    <OHMMS_PRECISION>>(SPOSet_main, team_size, member_id);
 }
 
 } // namespace qmcplusplus
+

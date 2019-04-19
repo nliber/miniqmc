@@ -31,6 +31,7 @@
 #include <Particle/ParticleSet_builder.hpp>
 #include <Input/pseudo.hpp>
 #include <algorithm>
+#include <memory>
 #include <iterator>
 
 namespace qmcplusplus
@@ -54,7 +55,7 @@ struct Mover
   /// electrons
   ParticleSet els;
   /// single particle orbitals
-  SPOSet* spo;
+  std::unique_ptr<SPOSet> spo;
   /// wavefunction container
   WaveFunction wavefunction;
   /// non-local pseudo-potentials
@@ -64,13 +65,6 @@ struct Mover
   Mover(const uint32_t myPrime, const ParticleSet& ions) : spo(nullptr), rng(myPrime), nlpp(rng)
   {
     build_els(els, ions, rng);
-  }
-
-  /// destructor
-  ~Mover()
-  {
-    if (spo != nullptr)
-      delete spo;
   }
 };
 
@@ -95,7 +89,7 @@ const std::vector<ParticleSet*> extract_els_list(const std::vector<Mover*>& move
   std::vector<ParticleSet*> els_list;
   els_list.reserve(mover_list.size());
   std::transform(std::begin(mover_list), std::end(mover_list), std::back_inserter(els_list),
-                 [](Mover* m) { return &m->els; });
+                 [](Mover* m){ return &m->els; });
   return els_list;
 }
 
@@ -104,7 +98,7 @@ const std::vector<SPOSet*> extract_spo_list(const std::vector<Mover*>& mover_lis
   std::vector<SPOSet*> spo_list;
   spo_list.reserve(mover_list.size());
   std::transform(std::begin(mover_list), std::end(mover_list), std::back_inserter(spo_list),
-                 [](Mover* m){ return m->spo; });
+                 [](Mover* m){ return m->spo.get(); });
   return spo_list;
 }
 

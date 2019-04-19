@@ -322,214 +322,214 @@ int main(int argc, char** argv)
 
     print_version(verbose);
 
-    SPOSet* spo_main;
-    int nTiles = 1;
-
-    ParticleSet ions;
-    // For VMC, tau is large and should result in an acceptance ratio of roughly
-    // 50%
-    // For DMC, tau is small and should result in an acceptance ratio of 99%
-    const RealType tau = 2.0;
-    RealType sqrttau = std::sqrt(tau);
-    RealType accept  = 0.5;
-
-    // initialize ions and splines which are shared by all threads later
+    std::unique_ptr<SPOSet> spo_main;
     {
-      Timers[Timer_Setup]->start();
-      Tensor<OHMMS_PRECISION, 3> lattice_b;
-      build_ions(ions, tmat, lattice_b);
-      const int nels = count_electrons(ions, 1);
-      const int norb = nels / 2;
-      tileSize       = (tileSize > 0) ? tileSize : norb;
-      nTiles         = norb / tileSize;
-
-      number_of_electrons = nels;
-
-      const size_t SPO_coeff_size =
-          static_cast<size_t>(norb) * (nx + 3) * (ny + 3) * (nz + 3) * sizeof(RealType);
-      const double SPO_coeff_size_MB = SPO_coeff_size * 1.0 / 1024 / 1024;
-
-      app_summary() << "Number of orbitals/splines = " << norb << endl
-                    << "Tile size = " << tileSize << endl
-                    << "Number of tiles = " << nTiles << endl
-                    << "Number of electrons = " << nels << endl
-                    << "Rmax = " << Rmax << endl
-                    << "AcceptanceRatio = " << accept << endl;
-      app_summary() << "Iterations = " << nsteps << endl;
-      app_summary() << "OpenMP threads = " << omp_get_max_threads() << endl;
-#ifdef HAVE_MPI
-      app_summary() << "MPI processes = " << comm.size() << endl;
-#endif
-
-      app_summary() << "\nSPO coefficients size = " << SPO_coeff_size << " bytes ("
-                    << SPO_coeff_size_MB << " MB)" << endl;
-
-      spo_main = build_SPOSet(useRef, nx, ny, nz, norb, nTiles, lattice_b);
-    }
-
-    if (!useRef)
-      app_summary() << "Using SoA distance table, Jastrow + einspline, " << endl
-                    << "and determinant update." << endl;
-    else
-      app_summary() << "Using the reference implementation for Jastrow, " << endl
-                    << "determinant update, and distance table + einspline of the " << endl
-                    << "reference implementation " << endl;
-
-    Timers[Timer_Total]->start();
-
-
-    const int nions = ions.getTotalNum();
-    //const int nels  = mover_list[0]->els.getTotalNum();
-    const int nels  = count_electrons(ions,1);
-    const int nels3 = 3 * nels;
-
-    // this is the number of quadrature points for the non-local PP
-    
-    // Clearly this is not general, but for now, 12 point quadrature is hard coded in 
-    // NonLocalPP.  Thus, we bypass the need to initialize the whole set of movers to 
-    // read this hard coded number.
-    const int nknots = 12; 
-
-   
-    //Now lets figure out what threading sizes are needed:
-    //  For walker level parallelism:
-   
- 
-    auto main_function = [&](int partition_id, int num_partitions)
-    {
-      printf(" partition_id = %d\n",partition_id);
-      //Since we've merged initialization and execution, we get rid of the 
-      // mover_list vector.
-      const int teamID = partition_id;
-      Timers[Timer_Init]->start();
-      // create and initialize movers
-      Mover thiswalker(myPrimes[teamID], ions);
-      // create a spo view in each Mover
-      thiswalker.spo = build_SPOSet_view(useRef, spo_main, team_size, teamID);
-
-      // create wavefunction per mover
-      build_WaveFunction(useRef, thiswalker.wavefunction, ions, thiswalker.els, thiswalker.rng, enableJ3);
-
-      // initial computing
-      thiswalker.els.update();
-      thiswalker.wavefunction.evaluateLog(thiswalker.els);
-      Timers[Timer_Init]->stop();
-
-      auto& els          = thiswalker.els;
-      auto& spo          = *thiswalker.spo;
-      auto& random_th    = thiswalker.rng;
-      auto& wavefunction = thiswalker.wavefunction;
-      auto& ecp          = thiswalker.nlpp;
-
-      ParticlePos_t delta(nels);
-      ParticlePos_t rOnSphere(nknots);
-
-      aligned_vector<RealType> ur(nels);
-
-      int my_accepted = 0;
-      for (int mc = 0; mc < nsteps; ++mc)
+      int nTiles = 1;
+  
+      ParticleSet ions;
+      // For VMC, tau is large and should result in an acceptance ratio of roughly
+      // 50%
+      // For DMC, tau is small and should result in an acceptance ratio of 99%
+      const RealType tau = 2.0;
+      RealType sqrttau = std::sqrt(tau);
+      RealType accept  = 0.5;
+  
+      // initialize ions and splines which are shared by all threads later
       {
-        Timers[Timer_Diffusion]->start();
-        for (int l = 0; l < nsubsteps; ++l) // drift-and-diffusion
+        Timers[Timer_Setup]->start();
+        Tensor<OHMMS_PRECISION, 3> lattice_b;
+        build_ions(ions, tmat, lattice_b);
+        const int nels = count_electrons(ions, 1);
+        const int norb = nels / 2;
+        tileSize       = (tileSize > 0) ? tileSize : norb;
+        nTiles         = norb / tileSize;
+  
+        number_of_electrons = nels;
+  
+        const size_t SPO_coeff_size =
+            static_cast<size_t>(norb) * (nx + 3) * (ny + 3) * (nz + 3) * sizeof(RealType);
+        const double SPO_coeff_size_MB = SPO_coeff_size * 1.0 / 1024 / 1024;
+  
+        app_summary() << "Number of orbitals/splines = " << norb << endl
+                      << "Tile size = " << tileSize << endl
+                      << "Number of tiles = " << nTiles << endl
+                      << "Number of electrons = " << nels << endl
+                      << "Rmax = " << Rmax << endl
+                      << "AcceptanceRatio = " << accept << endl;
+        app_summary() << "Iterations = " << nsteps << endl;
+        app_summary() << "OpenMP threads = " << omp_get_max_threads() << endl;
+  #ifdef HAVE_MPI
+        app_summary() << "MPI processes = " << comm.size() << endl;
+  #endif
+  
+        app_summary() << "\nSPO coefficients size = " << SPO_coeff_size << " bytes ("
+                      << SPO_coeff_size_MB << " MB)" << endl;
+  
+        spo_main = build_SPOSet(useRef, nx, ny, nz, norb, nTiles, lattice_b);
+      }
+  
+      if (!useRef)
+        app_summary() << "Using SoA distance table, Jastrow + einspline, " << endl
+                      << "and determinant update." << endl;
+      else
+        app_summary() << "Using the reference implementation for Jastrow, " << endl
+                      << "determinant update, and distance table + einspline of the " << endl
+                      << "reference implementation " << endl;
+  
+      Timers[Timer_Total]->start();
+  
+  
+      const int nions = ions.getTotalNum();
+      //const int nels  = mover_list[0]->els.getTotalNum();
+      const int nels  = count_electrons(ions,1);
+      const int nels3 = 3 * nels;
+  
+      // this is the number of quadrature points for the non-local PP
+      
+      // Clearly this is not general, but for now, 12 point quadrature is hard coded in 
+      // NonLocalPP.  Thus, we bypass the need to initialize the whole set of movers to 
+      // read this hard coded number.
+      const int nknots = 12; 
+  
+     
+      //Now lets figure out what threading sizes are needed:
+      //  For walker level parallelism:
+     
+   
+      auto main_function = [&](int partition_id, int num_partitions)
+      {
+        printf(" partition_id = %d\n",partition_id);
+        //Since we've merged initialization and execution, we get rid of the 
+        // mover_list vector.
+        const int teamID = partition_id;
+        Timers[Timer_Init]->start();
+        // create and initialize movers
+        Mover thiswalker(myPrimes[teamID], ions);
+        // create a spo view in each Mover
+        thiswalker.spo = build_SPOSet_view(useRef, spo_main.get(), team_size, teamID);
+  
+        // create wavefunction per mover
+        build_WaveFunction(useRef, thiswalker.wavefunction, ions, thiswalker.els, thiswalker.rng, enableJ3);
+  
+        // initial computing
+        thiswalker.els.update();
+        thiswalker.wavefunction.evaluateLog(thiswalker.els);
+        Timers[Timer_Init]->stop();
+  
+        auto& els          = thiswalker.els;
+        auto& spo          = *thiswalker.spo;
+        auto& random_th    = thiswalker.rng;
+        auto& wavefunction = thiswalker.wavefunction;
+        auto& ecp          = thiswalker.nlpp;
+  
+        ParticlePos_t delta(nels);
+        ParticlePos_t rOnSphere(nknots);
+  
+        aligned_vector<RealType> ur(nels);
+  
+        int my_accepted = 0;
+        for (int mc = 0; mc < nsteps; ++mc)
         {
-          random_th.generate_uniform(ur.data(), nels);
-          random_th.generate_normal(&delta[0][0], nels3);
-          for (int iel = 0; iel < nels; ++iel)
+          Timers[Timer_Diffusion]->start();
+          for (int l = 0; l < nsubsteps; ++l) // drift-and-diffusion
           {
-            // Operate on electron with index iel
-            els.setActive(iel);
-            // Compute gradient at the current position
-            Timers[Timer_evalGrad]->start();
-            PosType grad_now = wavefunction.evalGrad(els, iel);
-            Timers[Timer_evalGrad]->stop();
-
-            // Construct trial move
-            PosType dr   = sqrttau * delta[iel];
-            bool isValid = els.makeMoveAndCheck(iel, dr);
-
-            if (!isValid)
-              continue;
-
-            // Compute gradient at the trial position
-            Timers[Timer_ratioGrad]->start();
-
-            PosType grad_new;
-            wavefunction.ratioGrad(els, iel, grad_new);
-
-            spo.evaluate_vgh(els.R[iel]);
-
-            Timers[Timer_ratioGrad]->stop();
-
-            // Accept/reject the trial move
-            if (ur[iel] > accept) // MC
+            random_th.generate_uniform(ur.data(), nels);
+            random_th.generate_normal(&delta[0][0], nels3);
+            for (int iel = 0; iel < nels; ++iel)
             {
-              // Update position, and update temporary storage
-              Timers[Timer_Update]->start();
-              wavefunction.acceptMove(els, iel);
-              Timers[Timer_Update]->stop();
-              els.acceptMove(iel);
-              my_accepted++;
-            }
-            else
-            {
-              els.rejectMove(iel);
-              wavefunction.restore(iel);
-            }
-          } // iel
-        }   // substeps
-
-        els.donePbyP();
-
-        // evaluate Kinetic Energy
-        wavefunction.evaluateGL(els);
-
-        Timers[Timer_Diffusion]->stop();
-
-        // Compute NLPP energy using integral over spherical points
-
-        ecp.randomize(rOnSphere); // pick random sphere
-        const DistanceTableData* d_ie = els.DistTables[wavefunction.get_ei_TableID()];
-
-        Timers[Timer_ECP]->start();
-        for (int jel = 0; jel < els.getTotalNum(); ++jel)
-        {
-          const auto& dist  = d_ie->Distances[jel];
-          const auto& displ = d_ie->Displacements[jel];
-          for (int iat = 0; iat < nions; ++iat)
-            if (dist[iat] < Rmax)
-              for (int k = 0; k < nknots; k++)
+              // Operate on electron with index iel
+              els.setActive(iel);
+              // Compute gradient at the current position
+              Timers[Timer_evalGrad]->start();
+              PosType grad_now = wavefunction.evalGrad(els, iel);
+              Timers[Timer_evalGrad]->stop();
+  
+              // Construct trial move
+              PosType dr   = sqrttau * delta[iel];
+              bool isValid = els.makeMoveAndCheck(iel, dr);
+  
+              if (!isValid)
+                continue;
+  
+              // Compute gradient at the trial position
+              Timers[Timer_ratioGrad]->start();
+  
+              PosType grad_new;
+              wavefunction.ratioGrad(els, iel, grad_new);
+  
+              spo.evaluate_vgh(els.R[iel]);
+  
+              Timers[Timer_ratioGrad]->stop();
+  
+              // Accept/reject the trial move
+              if (ur[iel] > accept) // MC
               {
-                PosType deltar(dist[iat] * rOnSphere[k] - displ[iat]);
-
-                els.makeMoveOnSphere(jel, deltar);
-
-                Timers[Timer_Value]->start();
-                spo.evaluate_v(els.R[jel]);
-                wavefunction.ratio(els, jel);
-                Timers[Timer_Value]->stop();
-
-                els.rejectMove(jel);
+                // Update position, and update temporary storage
+                Timers[Timer_Update]->start();
+                wavefunction.acceptMove(els, iel);
+                Timers[Timer_Update]->stop();
+                els.acceptMove(iel);
+                my_accepted++;
               }
-        }
-        Timers[Timer_ECP]->stop();
-
-      } // nsteps
-
-    }; // end of mover loop
-
-  #if defined(KOKKOS_ENABLE_OPENMP) && !defined(KOKKOS_ENABLE_CUDA)
-    int num_threads = Kokkos::OpenMP::thread_pool_size();
-    
-    int crewsize = std::max(1,num_threads/ncrews); 
-    printf(" In partition master with %d threads, %d crews, and %d movers.  Crewsize = %d \n",num_threads,ncrews,nmovers,crewsize);
-    Kokkos::OpenMP::partition_master(main_function,nmovers,crewsize);
-  #else
-    main_function(0,1);
-  #endif  
- 
-    Timers[Timer_Total]->stop();
-
-    delete spo_main;
+              else
+              {
+                els.rejectMove(iel);
+                wavefunction.restore(iel);
+              }
+            } // iel
+          }   // substeps
+  
+          els.donePbyP();
+  
+          // evaluate Kinetic Energy
+          wavefunction.evaluateGL(els);
+  
+          Timers[Timer_Diffusion]->stop();
+  
+          // Compute NLPP energy using integral over spherical points
+  
+          ecp.randomize(rOnSphere); // pick random sphere
+          const DistanceTableData* d_ie = els.DistTables[wavefunction.get_ei_TableID()];
+  
+          Timers[Timer_ECP]->start();
+          for (int jel = 0; jel < els.getTotalNum(); ++jel)
+          {
+            const auto& dist  = d_ie->Distances[jel];
+            const auto& displ = d_ie->Displacements[jel];
+            for (int iat = 0; iat < nions; ++iat)
+              if (dist[iat] < Rmax)
+                for (int k = 0; k < nknots; k++)
+                {
+                  PosType deltar(dist[iat] * rOnSphere[k] - displ[iat]);
+  
+                  els.makeMoveOnSphere(jel, deltar);
+  
+                  Timers[Timer_Value]->start();
+                  spo.evaluate_v(els.R[jel]);
+                  wavefunction.ratio(els, jel);
+                  Timers[Timer_Value]->stop();
+  
+                  els.rejectMove(jel);
+                }
+          }
+          Timers[Timer_ECP]->stop();
+  
+        } // nsteps
+  
+      }; // end of mover loop
+  
+    #if defined(KOKKOS_ENABLE_OPENMP) && !defined(KOKKOS_ENABLE_CUDA)
+      int num_threads = Kokkos::OpenMP::thread_pool_size();
+      
+      int crewsize = std::max(1,num_threads/ncrews); 
+      printf(" In partition master with %d threads, %d crews, and %d movers.  Crewsize = %d \n",num_threads,ncrews,nmovers,crewsize);
+      Kokkos::OpenMP::partition_master(main_function,nmovers,crewsize);
+    #else
+      main_function(0,1);
+    #endif  
+   
+      Timers[Timer_Total]->stop();
+    }
 
     if (comm.root())
     {

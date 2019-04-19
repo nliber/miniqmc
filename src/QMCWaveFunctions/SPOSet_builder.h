@@ -13,11 +13,12 @@
 #define QMCPLUSPLUS_SINGLEPARTICLEORBITALSET_BUILDER_H
 
 #include "QMCWaveFunctions/SPOSet.h"
+#include <memory>
 
 namespace qmcplusplus
 {
 /// build the einspline SPOSet.
-SPOSet* build_SPOSet(bool useRef,
+std::unique_ptr<SPOSet> build_SPOSet(bool useRef,
                      int nx,
                      int ny,
                      int nz,
@@ -27,7 +28,7 @@ SPOSet* build_SPOSet(bool useRef,
                      bool init_random = true);
 
 /// build the einspline SPOSet as a view of the main one.
-SPOSet* build_SPOSet_view(bool useRef, const SPOSet* SPOSet_main, int team_size, int member_id);
+std::unique_ptr<SPOSet> build_SPOSet_view(bool useRef, const SPOSet* SPOSet_main, int team_size, int member_id);
 
 } // namespace qmcplusplus
 #endif

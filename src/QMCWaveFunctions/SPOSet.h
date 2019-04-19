@@ -35,7 +35,7 @@ public:
   inline int size() const { return OrbitalSetSize; }
 
   /// destructor
-  virtual ~SPOSet() {}
+  virtual ~SPOSet() = default;
 
   /// operates on a single walker
   /// evaluating SPOs

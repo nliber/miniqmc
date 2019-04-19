@@ -318,241 +318,242 @@ int main(int argc, char** argv)
 
   print_version(verbose);
 
-  SPOSet* spo_main;
-  int nTiles = 1;
-
-  ParticleSet ions;
-  // initialize ions and splines which are shared by all threads later
+  std::unique_ptr<SPOSet> spo_main;
   {
-    Timers[Timer_Setup]->start();
-    Tensor<OHMMS_PRECISION, 3> lattice_b;
-    build_ions(ions, tmat, lattice_b);
-    const int nels = count_electrons(ions, 1);
-    const int norb = nels / 2;
-    tileSize       = (tileSize > 0) ? tileSize : norb;
-    nTiles         = norb / tileSize;
+    int nTiles = 1;
 
-    number_of_electrons = nels;
-
-    const size_t SPO_coeff_size =
-        static_cast<size_t>(norb) * (nx + 3) * (ny + 3) * (nz + 3) * sizeof(RealType);
-    const double SPO_coeff_size_MB = SPO_coeff_size * 1.0 / 1024 / 1024;
-
-    app_summary() << "Number of orbitals/splines = " << norb << endl
-                  << "Tile size = " << tileSize << endl
-                  << "Number of tiles = " << nTiles << endl
-                  << "Number of electrons = " << nels << endl
-                  << "Rmax = " << Rmax << endl
-                  << "AcceptanceRatio = " << accept << endl;
-    app_summary() << "Iterations = " << nsteps << endl;
-    app_summary() << "OpenMP threads = " << omp_get_max_threads() << endl;
-#ifdef HAVE_MPI
-    app_summary() << "MPI processes = " << comm.size() << endl;
-#endif
-
-    app_summary() << "\nSPO coefficients size = " << SPO_coeff_size << " bytes ("
-                  << SPO_coeff_size_MB << " MB)" << endl;
-
-    spo_main = build_SPOSet(useRef, nx, ny, nz, norb, nTiles, lattice_b);
-    Timers[Timer_Setup]->stop();
-  }
-
-  if (!useRef)
-    app_summary() << "Using SoA distance table, Jastrow + einspline, " << endl
-                  << "and determinant update." << endl;
-  else
-    app_summary() << "Using the reference implementation for Jastrow, " << endl
-                  << "determinant update, and distance table + einspline of the " << endl
-                  << "reference implementation " << endl;
-
-  Timers[Timer_Total]->start();
-
-  Timers[Timer_Init]->start();
-  std::vector<Mover*> mover_list(nmovers, nullptr);
-  // prepare movers
-  #pragma omp parallel for
-  for (int iw = 0; iw < nmovers; iw++)
-  {
-    const int ip        = omp_get_thread_num();
-    const int member_id = ip % team_size;
-
-    // create and initialize movers
-    Mover* thiswalker = new Mover(myPrimes[ip], ions);
-    mover_list[iw]    = thiswalker;
-
-    // create a spo view in each Mover
-    thiswalker->spo = build_SPOSet_view(useRef, spo_main, team_size, member_id);
-
-    // create wavefunction per mover
-    build_WaveFunction(useRef, thiswalker->wavefunction, ions, thiswalker->els, thiswalker->rng, enableJ3);
-
-    // initial computing
-    thiswalker->els.update();
-  }
-
-  { // initial computing
-    const std::vector<ParticleSet*> P_list(extract_els_list(mover_list));
-    const std::vector<WaveFunction*> WF_list(extract_wf_list(mover_list));
-    mover_list[0]->wavefunction.multi_evaluateLog(WF_list, P_list);
-  }
-  Timers[Timer_Init]->stop();
-
-  const int nions    = ions.getTotalNum();
-  const int nels     = mover_list[0]->els.getTotalNum();
-  const int nels3    = 3 * nels;
-  const int nmovers3 = 3 * nmovers;
-
-  // this is the number of qudrature points for the non-local PP
-  const int nknots(mover_list[0]->nlpp.size());
-
-  // For VMC, tau is large and should result in an acceptance ratio of roughly
-  // 50%
-  // For DMC, tau is small and should result in an acceptance ratio of 99%
-  const RealType tau = 2.0;
-
-  RealType sqrttau = std::sqrt(tau);
-
-  // synchronous walker moves
-  {
-    std::vector<PosType> delta(nmovers);
-    std::vector<PosType> pos_list(nmovers);
-    std::vector<GradType> grad_now(nmovers);
-    std::vector<GradType> grad_new(nmovers);
-    std::vector<ValueType> ratios(nmovers);
-    aligned_vector<RealType> ur(nmovers);
-    /// masks for movers with valid moves
-    std::vector<int> isValid(nmovers);
-
-    for (int mc = 0; mc < nsteps; ++mc)
+    ParticleSet ions;
+    // initialize ions and splines which are shared by all threads later
     {
-      Timers[Timer_Diffusion]->start();
+      Timers[Timer_Setup]->start();
+      Tensor<OHMMS_PRECISION, 3> lattice_b;
+      build_ions(ions, tmat, lattice_b);
+      const int nels = count_electrons(ions, 1);
+      const int norb = nels / 2;
+      tileSize       = (tileSize > 0) ? tileSize : norb;
+      nTiles         = norb / tileSize;
 
+      number_of_electrons = nels;
+
+      const size_t SPO_coeff_size =
+          static_cast<size_t>(norb) * (nx + 3) * (ny + 3) * (nz + 3) * sizeof(RealType);
+      const double SPO_coeff_size_MB = SPO_coeff_size * 1.0 / 1024 / 1024;
+
+      app_summary() << "Number of orbitals/splines = " << norb << endl
+                    << "Tile size = " << tileSize << endl
+                    << "Number of tiles = " << nTiles << endl
+                    << "Number of electrons = " << nels << endl
+                    << "Rmax = " << Rmax << endl
+                    << "AcceptanceRatio = " << accept << endl;
+      app_summary() << "Iterations = " << nsteps << endl;
+      app_summary() << "OpenMP threads = " << omp_get_max_threads() << endl;
+  #ifdef HAVE_MPI
+      app_summary() << "MPI processes = " << comm.size() << endl;
+  #endif
+
+      app_summary() << "\nSPO coefficients size = " << SPO_coeff_size << " bytes ("
+                    << SPO_coeff_size_MB << " MB)" << endl;
+
+      spo_main = build_SPOSet(useRef, nx, ny, nz, norb, nTiles, lattice_b);
+      Timers[Timer_Setup]->stop();
+    }
+
+    if (!useRef)
+      app_summary() << "Using SoA distance table, Jastrow + einspline, " << endl
+                    << "and determinant update." << endl;
+    else
+      app_summary() << "Using the reference implementation for Jastrow, " << endl
+                    << "determinant update, and distance table + einspline of the " << endl
+                    << "reference implementation " << endl;
+
+    Timers[Timer_Total]->start();
+
+    Timers[Timer_Init]->start();
+    std::vector<Mover*> mover_list(nmovers, nullptr);
+    // prepare movers
+    #pragma omp parallel for
+    for (int iw = 0; iw < nmovers; iw++)
+    {
+      const int ip        = omp_get_thread_num();
+      const int member_id = ip % team_size;
+
+      // create and initialize movers
+      Mover* thiswalker = new Mover(myPrimes[ip], ions);
+      mover_list[iw]    = thiswalker;
+
+      // create a spo view in each Mover
+      thiswalker->spo = build_SPOSet_view(useRef, spo_main.get(), team_size, member_id);
+
+      // create wavefunction per mover
+      build_WaveFunction(useRef, thiswalker->wavefunction, ions, thiswalker->els, thiswalker->rng, enableJ3);
+
+      // initial computing
+      thiswalker->els.update();
+    }
+
+    { // initial computing
       const std::vector<ParticleSet*> P_list(extract_els_list(mover_list));
       const std::vector<WaveFunction*> WF_list(extract_wf_list(mover_list));
-      const Mover& anon_mover = *mover_list[0];
+      mover_list[0]->wavefunction.multi_evaluateLog(WF_list, P_list);
+    }
+    Timers[Timer_Init]->stop();
 
-      for (int l = 0; l < nsubsteps; ++l) // drift-and-diffusion
+    const int nions    = ions.getTotalNum();
+    const int nels     = mover_list[0]->els.getTotalNum();
+    const int nels3    = 3 * nels;
+    const int nmovers3 = 3 * nmovers;
+
+    // this is the number of qudrature points for the non-local PP
+    const int nknots(mover_list[0]->nlpp.size());
+
+    // For VMC, tau is large and should result in an acceptance ratio of roughly
+    // 50%
+    // For DMC, tau is small and should result in an acceptance ratio of 99%
+    const RealType tau = 2.0;
+
+    RealType sqrttau = std::sqrt(tau);
+
+    // synchronous walker moves
+    {
+      std::vector<PosType> delta(nmovers);
+      std::vector<PosType> pos_list(nmovers);
+      std::vector<GradType> grad_now(nmovers);
+      std::vector<GradType> grad_new(nmovers);
+      std::vector<ValueType> ratios(nmovers);
+      aligned_vector<RealType> ur(nmovers);
+      /// masks for movers with valid moves
+      std::vector<int> isValid(nmovers);
+
+      for (int mc = 0; mc < nsteps; ++mc)
       {
-        for (int iel = 0; iel < nels; ++iel)
+        Timers[Timer_Diffusion]->start();
+
+        const std::vector<ParticleSet*> P_list(extract_els_list(mover_list));
+        const std::vector<WaveFunction*> WF_list(extract_wf_list(mover_list));
+        const Mover& anon_mover = *mover_list[0];
+
+        for (int l = 0; l < nsubsteps; ++l) // drift-and-diffusion
         {
-	  // Operate on electron with index iel
-          #pragma omp parallel for
-          for (int iw = 0; iw < nmovers; iw++)
-            mover_list[iw]->els.setActive(iel);
-
-          // Compute gradient at the current position
-          Timers[Timer_evalGrad]->start();
-          anon_mover.wavefunction.multi_evalGrad(WF_list, P_list, iel, grad_now);
-          Timers[Timer_evalGrad]->stop();
-
-          // Construct trial move
-          mover_list[0]->rng.generate_uniform(ur.data(), nmovers);
-          mover_list[0]->rng.generate_normal(&delta[0][0], nmovers3);
-
-          #pragma omp parallel for
-          for (int iw = 0; iw < nmovers; iw++)
+          for (int iel = 0; iel < nels; ++iel)
           {
-            PosType dr  = sqrttau * delta[iw];
-            isValid[iw] = mover_list[iw]->els.makeMoveAndCheck(iel, dr);
-          }
+  	  // Operate on electron with index iel
+            #pragma omp parallel for
+            for (int iw = 0; iw < nmovers; iw++)
+              mover_list[iw]->els.setActive(iel);
 
-          std::vector<Mover*> valid_mover_list(filtered_list(mover_list, isValid));
-          std::vector<bool> isAccepted(valid_mover_list.size());
+            // Compute gradient at the current position
+            Timers[Timer_evalGrad]->start();
+            anon_mover.wavefunction.multi_evalGrad(WF_list, P_list, iel, grad_now);
+            Timers[Timer_evalGrad]->stop();
 
-          const std::vector<ParticleSet*> valid_P_list(extract_els_list(valid_mover_list));
-          const std::vector<SPOSet*> valid_spo_list(extract_spo_list(valid_mover_list));
-          const std::vector<WaveFunction*> valid_WF_list(extract_wf_list(valid_mover_list));
+            // Construct trial move
+            mover_list[0]->rng.generate_uniform(ur.data(), nmovers);
+            mover_list[0]->rng.generate_normal(&delta[0][0], nmovers3);
 
-          // Compute gradient at the trial position
-          Timers[Timer_ratioGrad]->start();
-          anon_mover.wavefunction.multi_ratioGrad(valid_WF_list, valid_P_list, iel, ratios, grad_new);
+            #pragma omp parallel for
+            for (int iw = 0; iw < nmovers; iw++)
+            {
+              PosType dr  = sqrttau * delta[iw];
+              isValid[iw] = mover_list[iw]->els.makeMoveAndCheck(iel, dr);
+            }
 
-          for (int iw = 0; iw < valid_mover_list.size(); iw++)
-            pos_list[iw] = valid_mover_list[iw]->els.R[iel];
-          anon_mover.spo->multi_evaluate_vgh(valid_spo_list, pos_list);
-          Timers[Timer_ratioGrad]->stop();
+            std::vector<Mover*> valid_mover_list(filtered_list(mover_list, isValid));
+            std::vector<bool> isAccepted(valid_mover_list.size());
 
-          // Accept/reject the trial move
-          for (int iw = 0; iw < valid_mover_list.size(); iw++)
-            if (ur[iw] < accept)
-              isAccepted[iw] = true;
-            else
-              isAccepted[iw] = false;
+            const std::vector<ParticleSet*> valid_P_list(extract_els_list(valid_mover_list));
+            const std::vector<SPOSet*> valid_spo_list(extract_spo_list(valid_mover_list));
+            const std::vector<WaveFunction*> valid_WF_list(extract_wf_list(valid_mover_list));
 
-          Timers[Timer_Update]->start();
-          // update WF storage
-          anon_mover.wavefunction.multi_acceptrestoreMove(valid_WF_list, valid_P_list, isAccepted, iel);
-          Timers[Timer_Update]->stop();
+            // Compute gradient at the trial position
+            Timers[Timer_ratioGrad]->start();
+            anon_mover.wavefunction.multi_ratioGrad(valid_WF_list, valid_P_list, iel, ratios, grad_new);
 
-          // Update position
-          #pragma omp parallel for
-          for (int iw = 0; iw < valid_mover_list.size(); iw++)
-          {
-            if (isAccepted[iw]) // MC
-              valid_mover_list[iw]->els.acceptMove(iel);
-            else
-              valid_mover_list[iw]->els.rejectMove(iel);
-          }
-        } // iel
-      }   // substeps
+            for (int iw = 0; iw < valid_mover_list.size(); iw++)
+              pos_list[iw] = valid_mover_list[iw]->els.R[iel];
+            anon_mover.spo->multi_evaluate_vgh(valid_spo_list, pos_list);
+            Timers[Timer_ratioGrad]->stop();
 
-      #pragma omp parallel for
-      for (int iw = 0; iw < nmovers; iw++)
-      {
-        mover_list[iw]->els.donePbyP();
-        // evaluate Kinetic Energy
-      }
-      anon_mover.wavefunction.multi_evaluateGL(WF_list, P_list);
+            // Accept/reject the trial move
+            for (int iw = 0; iw < valid_mover_list.size(); iw++)
+              if (ur[iw] < accept)
+                isAccepted[iw] = true;
+              else
+                isAccepted[iw] = false;
 
-      Timers[Timer_Diffusion]->stop();
+            Timers[Timer_Update]->start();
+            // update WF storage
+            anon_mover.wavefunction.multi_acceptrestoreMove(valid_WF_list, valid_P_list, isAccepted, iel);
+            Timers[Timer_Update]->stop();
 
-      // Compute NLPP energy using integral over spherical points
-      // Ye: I have not found a strategy for NLPP
-      Timers[Timer_ECP]->start();
-      #pragma omp parallel for
-      for (int iw = 0; iw < nmovers; iw++)
-      {
-        auto& els          = mover_list[iw]->els;
-        auto& spo          = *mover_list[iw]->spo;
-        auto& wavefunction = mover_list[iw]->wavefunction;
-        auto& ecp          = mover_list[iw]->nlpp;
+            // Update position
+            #pragma omp parallel for
+            for (int iw = 0; iw < valid_mover_list.size(); iw++)
+            {
+              if (isAccepted[iw]) // MC
+                valid_mover_list[iw]->els.acceptMove(iel);
+              else
+                valid_mover_list[iw]->els.rejectMove(iel);
+            }
+          } // iel
+        }   // substeps
 
-        ParticlePos_t rOnSphere(nknots);
-        ecp.randomize(rOnSphere); // pick random sphere
-        const DistanceTableData* d_ie = els.DistTables[wavefunction.get_ei_TableID()];
-
-        for (int jel = 0; jel < els.getTotalNum(); ++jel)
+        #pragma omp parallel for
+        for (int iw = 0; iw < nmovers; iw++)
         {
-          const auto& dist  = d_ie->Distances[jel];
-          const auto& displ = d_ie->Displacements[jel];
-          for (int iat = 0; iat < nions; ++iat)
-            if (dist[iat] < Rmax)
-              for (int k = 0; k < nknots; k++)
-              {
-                PosType deltar(dist[iat] * rOnSphere[k] - displ[iat]);
-
-                els.makeMoveOnSphere(jel, deltar);
-
-                Timers[Timer_Value]->start();
-                spo.evaluate_v(els.R[jel]);
-                wavefunction.ratio(els, jel);
-                Timers[Timer_Value]->stop();
-
-                els.rejectMove(jel);
-              }
+          mover_list[iw]->els.donePbyP();
+          // evaluate Kinetic Energy
         }
-      }
-      Timers[Timer_ECP]->stop();
-    } // nsteps
-  }
-  Timers[Timer_Total]->stop();
+        anon_mover.wavefunction.multi_evaluateGL(WF_list, P_list);
 
-  // free all movers
-  #pragma omp parallel for
-  for (int iw = 0; iw < nmovers; iw++)
-    delete mover_list[iw];
-  mover_list.clear();
-  delete spo_main;
+        Timers[Timer_Diffusion]->stop();
+
+        // Compute NLPP energy using integral over spherical points
+        // Ye: I have not found a strategy for NLPP
+        Timers[Timer_ECP]->start();
+        #pragma omp parallel for
+        for (int iw = 0; iw < nmovers; iw++)
+        {
+          auto& els          = mover_list[iw]->els;
+          auto& spo          = *mover_list[iw]->spo;
+          auto& wavefunction = mover_list[iw]->wavefunction;
+          auto& ecp          = mover_list[iw]->nlpp;
+
+          ParticlePos_t rOnSphere(nknots);
+          ecp.randomize(rOnSphere); // pick random sphere
+          const DistanceTableData* d_ie = els.DistTables[wavefunction.get_ei_TableID()];
+
+          for (int jel = 0; jel < els.getTotalNum(); ++jel)
+          {
+            const auto& dist  = d_ie->Distances[jel];
+            const auto& displ = d_ie->Displacements[jel];
+            for (int iat = 0; iat < nions; ++iat)
+              if (dist[iat] < Rmax)
+                for (int k = 0; k < nknots; k++)
+                {
+                  PosType deltar(dist[iat] * rOnSphere[k] - displ[iat]);
+
+                  els.makeMoveOnSphere(jel, deltar);
+
+                  Timers[Timer_Value]->start();
+                  spo.evaluate_v(els.R[jel]);
+                  wavefunction.ratio(els, jel);
+                  Timers[Timer_Value]->stop();
+
+                  els.rejectMove(jel);
+                }
+          }
+        }
+        Timers[Timer_ECP]->stop();
+      } // nsteps
+    }
+    Timers[Timer_Total]->stop();
+
+    // free all movers
+    #pragma omp parallel for
+    for (int iw = 0; iw < nmovers; iw++)
+      delete mover_list[iw];
+    mover_list.clear();
+  }
 
   if (comm.root())
   {
