@@ -17,10 +17,9 @@
 #ifndef INFOSTREAM_H
 #define INFOSTREAM_H
 
-#include <string>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
+#include <fstream>
+#include <memory>
+#include <ostream>
 
 /**
  *  Interface to output streams.  Can redirect output to stdout/stderr, a file, or a null stream.
@@ -29,26 +28,20 @@
 class InfoStream
 {
 public:
-  InfoStream(std::ostream* output_stream)
-      : prevStream(NULL), nullStream(new std::ostream(NULL)), ownStream(false)
-  {
-    currStream = output_stream;
-  }
+  explicit InfoStream(std::ostream* output_stream)
+      : currStream(output_stream)
+  {}
 
-  InfoStream(InfoStream& in)
-      : prevStream(NULL), nullStream(new std::ostream(NULL)), ownStream(false)
+  explicit InfoStream(InfoStream& in)
   {
     redirectToSameStream(in);
   }
 
-  ~InfoStream();
-
-  std::ostream& getStream(const std::string& tag = "") { return *currStream; }
+  std::ostream& getStream() const { return *currStream; }
 
   void setStream(std::ostream* output_stream) { currStream = output_stream; }
 
-
-  void flush() { currStream->flush(); }
+  void flush() const { currStream->flush(); }
 
   /// Stop output (redirect to a null stream)
   void pause();
@@ -67,23 +60,20 @@ public:
 
 private:
   // Keep track of whether we should delete the stream or not
-  bool ownStream;
+  std::unique_ptr<std::ofstream> ownStream;
 
-  std::ostream* currStream;
+  std::ostream* currStream = nullptr;
 
   // save stream during pause
-  std::ostream* prevStream;
+  std::ostream* prevStream = nullptr;
 
-  // Created at construction. Used during pause
-  std::ostream* nullStream;
+  // Used during pause
+  static std::ostream nullStream;
+
+  template<typename T>
+  friend InfoStream& operator<<(InfoStream& o, const T& val)
+  { return o.getStream() << val; }
 };
 
-template<class T>
-inline InfoStream& operator<<(InfoStream& o, const T& val)
-{
-  o.getStream() << val;
-  return o;
-}
-
-
 #endif
+

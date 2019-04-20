@@ -11,6 +11,7 @@
 
 
 #include <Utilities/OutputManager.h>
+#include <iostream>
 
 
 InfoStream infoSummary(&std::cout);
