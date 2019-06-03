@@ -176,12 +176,12 @@ void print_help()
 
 int main(int argc, char** argv)
 {
-  Kokkos::initialize(argc, argv);
   {
+    Kokkos::ScopeGuard(argc, argv);
     // clang-format off
-  typedef QMCTraits::RealType           RealType;
-  typedef ParticleSet::ParticlePos_t    ParticlePos_t;
-  typedef ParticleSet::PosType          PosType;
+    typedef QMCTraits::RealType           RealType;
+    typedef ParticleSet::ParticlePos_t    ParticlePos_t;
+    typedef ParticleSet::PosType          PosType;
     // clang-format on
 
     Communicate comm(argc, argv);
@@ -566,6 +566,5 @@ int main(int argc, char** argv)
       doc.SaveFile(info_name.c_str());
     }
   }
-  Kokkos::finalize();
   return 0;
 }

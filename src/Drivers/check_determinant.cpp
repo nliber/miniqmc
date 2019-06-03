@@ -55,8 +55,8 @@ void print_help()
 int main(int argc, char** argv)
 {
   int error_code=0;
-  Kokkos::initialize(argc, argv);
   { //Begin kokkos block.
+    Kokkos::ScopeGuard _(argc, argv);
 
     // clang-format off
     typedef QMCTraits::RealType           RealType;
@@ -232,6 +232,5 @@ int main(int argc, char** argv)
       cout << "All checks passed for determinant" << '\n';
 
   } //end kokkos block
-  Kokkos::finalize();
   return error_code;
 }

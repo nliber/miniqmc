@@ -65,9 +65,8 @@ void print_help()
 
 int main(int argc, char** argv)
 {
-  Kokkos::initialize(argc, argv);
   { //Begin kokkos block.
-
+    Kokkos::ScopeGuard _(argc, argv);
 
     // clang-format off
     typedef QMCTraits::RealType           RealType;
@@ -456,6 +455,5 @@ int main(int argc, char** argv)
       cout << "All checks passed for " << wfc_name << std::endl;
 
   } //end kokkos block
-  Kokkos::finalize();
   return 0;
 }
